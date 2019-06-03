@@ -4,7 +4,6 @@
 #  Tamas Jos (@skelsec)
 #
 import io
-import logging
 from minidump.win_datatypes import *
 from pypykatz.commons.common import *
 from pypykatz.commons.win_datatypes import *
@@ -79,6 +78,7 @@ class KIWI_TS_CREDENTIAL:
 	def __init__(self, reader):
 		self.unk0 = reader.read(64)
 		self.LocallyUniqueIdentifier = LUID(reader).value
+		reader.align()
 		self.unk1 = PVOID(reader)
 		self.unk2 = PVOID(reader)
 		self.pTsPrimary = PKIWI_TS_PRIMARY_CREDENTIAL(reader)
@@ -87,6 +87,7 @@ class KIWI_TS_CREDENTIAL_x64:
 	def __init__(self, reader):
 		self.unk0 = reader.read(108) 
 		self.LocallyUniqueIdentifier = LUID(reader).value
+		reader.align()
 		self.unk1 = PVOID(reader)
 		self.unk2 = PVOID(reader)
 		self.pTsPrimary = PKIWI_TS_PRIMARY_CREDENTIAL(reader)
@@ -95,6 +96,7 @@ class KIWI_TS_CREDENTIAL_1607:
 	def __init__(self, reader):
 		self.unk0 = reader.read(68)
 		self.LocallyUniqueIdentifier = LUID(reader).value
+		reader.align()
 		self.unk1 = PVOID(reader)
 		self.unk2 = PVOID(reader)
 		self.pTsPrimary = PKIWI_TS_PRIMARY_CREDENTIAL(reader)
@@ -104,6 +106,7 @@ class KIWI_TS_CREDENTIAL_1607_x64:
 	def __init__(self, reader):
 		self.unk0 = reader.read(112) 
 		self.LocallyUniqueIdentifier = LUID(reader).value
+		reader.align()
 		self.unk1 = PVOID(reader)
 		self.unk2 = PVOID(reader)
 		self.pTsPrimary = PKIWI_TS_PRIMARY_CREDENTIAL(reader)

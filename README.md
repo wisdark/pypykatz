@@ -1,8 +1,16 @@
 # pypykatz
-Mimikatz implementation in pure Python. -offline minidump parsing currently-  
+Mimikatz implementation in pure Python. -optimized for offline persing, but has options for live credential dumping as well-  
 Runs on all OS's which support python>=3.6
 
-## Usage
+## Installing
+Install it via pip or by cloning it from github.  
+The installer will create a pypykatz executable in the python's Script directory. You can run it from there, should be in your PATH.  
+
+### Via PIP
+```
+pip3 install pypykatz
+```
+### Via Github
 Install prerequirements
 ```
 pip3 install minidump minikerberos asn1crypto
@@ -12,53 +20,111 @@ Clone this repo
 git clone https://github.com/skelsec/pypykatz.git
 cd pypykatz
 ```
-Have fun
+Install it
 ```
-python3 pypykatz.py <dumpfile>
+python3 setup.py install
 ```
-## Useful commands
-**Foreword: there is an awesome help menu as well.**  
+## Quickwin
+Dumping LIVE system LSA secrets  
+```
+pypykatz live lsa
+```  
 
-### Store output in file:  
+Parsing minidump file of the LSASS process  
+```
+pypykatz minidump <minidump file>
+```  
+
+
+## Using pypykatz -detailed-
+**Foreword: there is an awesome help menu as well.**  
+The command structure is the following  
+```
+pypykatz <ouput options> <command> <subcommand (opt)>
+```
+
+### Output options
+Omitting the ```-o``` filed will result in output being printed to ```stdout```   
+  
+#### Debug info
+Increasing the number of ```v``` increases the size of memory to be shown on the screen.  
+**Warning! Too much data might result in cross-boundary read attempts!**
+Parameter: ```-v```  
+Example:  
+```
+pypykatz.py -vv mindidump <minidumpfile>
+```
+
+#### Write output to file:  
 Parameter: ```-o <output_file>```  
 Example: 
 ```
-pypykatz.py <dumpfile> -o <output_file>
+pypykatz.py -o <output_file> minidump <dumpfile> 
 ```
-### Store JSON output in file
+  
+#### Write output in JSON
+Together with the ```-o``` option it will write the output to a file, otherwise will print the output to ```stdout```   
+
 Parameter: ```--json```  
 Example: 
 ```
-pypykatz.py <dumpfile> --json -o <output file>
-```
-### Directory parsing AKA "I have some dmp files and want to get a meaningful output from ALL of them"
-Parameter: ```-d```  
-Example:  
-```
-pypykatz.py <folder_with_dumpfiles> -d --json -o <output file>
-```
-### Recursive parsing AKA "Okay, I actually run a botnet that sends me those files"
-Parameter: ```-r```  
-Example:  
-```
-pypykatz.py <folder_with_folder_of_dumpfiles> -d -r --json -o <output file>
-```
-### Debug info AKA "Feel like a haxx0r"
-Parameter: ```-vv```  
-Example:  
-```
-pypykatz.py <dumpfile> -vv
-```
-
+pypykatz.py --json -o <output file> minidump <dumpfile> 
+```  
 ### Kerberos 
-The kerberos tickets will be dumped BOTH in ```.kirbi``` and ```.ccache``` format.  
+Stores the kerberos tickets in BOTH ```.kirbi``` and ```.ccache``` formats to the directory given.  
 **WARNING!** An output directory is expected, as the ```.kirbi``` format supports only ONE ticket/file so get prepared to be swimming in those files when dealing with multiple/large dump files.  
   
 Parameter: ```-k <output_dir>```  
 Example:  
 ```
-pypykatz.py <dumpfile> -vv
+pypykatz.py -k <output_dir> minidump <dumpfile>
 ```
+
+### Minidump command options  
+#### Directory parsing
+This parameter tells pypykatz to look for all ```.dmp``` files in a given directory  
+
+Parameter: ```-d```  
+Example:  
+```
+pypykatz.py minidump <folder_with_dumpfiles> -d 
+```  
+
+#### Recursive parsing
+Supplying this parameter will force pypykatz to recursively look for ```.dmp``` files  
+Only works together with directory parsing.   
+
+Parameter: ```-r```  
+Example:  
+```
+pypykatz.py minidump <folder_with_folder_of_dumpfiles> -d -r
+```  
+### Rekall command options 
+#### Timestamp override
+Reason for this parameter to exist: In order to choose the correct structure for parsing we need the tiomestamp info of the msv dll file. Rekall sadly doesnt always have this info for some reason, therefore the parsing may be failing.  
+If the parsing is failing this could solve the issue.  
+  
+Parameter: ```-t```  
+Values: ```0``` or ```1```  
+Example:  
+```
+pypykatz.py rekall <momeory_dump_file> -t 0
+```  
+
+## Rekall usage
+There are two ways to use rekall-based memory parsing.  
+### Via the ```pypykatz rekall``` command
+You will need to specify the memory file to parse.  
+  
+### Via rekall command line
+IMPORTANT NOTICES: 
+1. If you are just now deciding to install ```rekall``` please note: it MUST be run in a virtualenv, and you will need to install pypykatz in the same virtualenv!  
+2. rekall command line is not suitable to show all information acquired from the memory, you should use the ```out_file``` and ```kerberos_dir``` command switches!     
+   
+You can find a rekall plugin file named ```pypykatz_rekall.py``` in the ```plugins``` folder of pypykatz.  
+You will need to copy it in rekall's ```plugins/windows``` folder, and rename it to ```pypykatz.py```.  
+After this modify the ```__init__.py``` file located the same folder and add the following line at the end: ```from rekall.plugins.windows import pypykatz```  
+If everything is okay you can use the ```pypykatz``` command from the ```rekall``` command line directly.
 
 # HELP WANTED
 If you want to help me getting this project into a stable release you can send mindiumps of the lsass.exe process to the following link: https://pypykatz.ocloud.de/index.php/s/NTErmGJxA42irfj  

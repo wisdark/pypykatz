@@ -4,7 +4,6 @@
 #  Tamas Jos (@skelsec)
 #
 import io
-import logging
 from minidump.win_datatypes import *
 from pypykatz.commons.common import *
 from pypykatz.commons.win_datatypes import *
@@ -24,7 +23,7 @@ class MsvTemplate(PackageTemplate):
 		self.decrypted_credential_struct = None
 	
 	@staticmethod
-	def get_template(sysinfo):		
+	def get_template(sysinfo):
 		template = MsvTemplate()
 		template.encrypted_credentials_list_struct = KIWI_MSV1_0_CREDENTIAL_LIST
 		template.log_template('encrypted_credentials_list_struct', template.encrypted_credentials_list_struct)
@@ -104,8 +103,13 @@ class MsvTemplate(PackageTemplate):
 				#template.first_entry_offset = 36
 				#template.offset2 = -6
 
-			else: # KULL_M_WIN_BUILD_10_1707
+			elif WindowsBuild.WIN_10_1707.value <= sysinfo.buildnumber < WindowsBuild.WIN_10_1803.value:
 				template.signature = b'\x33\xff\x45\x89\x37\x48\x8b\xf3\x45\x85\xc9\x74'
+				template.first_entry_offset = 23
+				template.offset2 = -4
+				
+			else: # KULL_M_WIN_BUILD_10_1803
+				template.signature = b'\x33\xff\x41\x89\x37\x4c\x8b\xf3\x45\x85\xc9\x74'
 				template.first_entry_offset = 23
 				template.offset2 = -4
 		
@@ -133,7 +137,7 @@ class MsvTemplate(PackageTemplate):
 				template.offset2 = -4
 				
 			elif WindowsMinBuild.WIN_BLUE.value <= sysinfo.buildnumber < WindowsBuild.WIN_10_1507.value:
-				template.signature = b'\x8b\x4d\xe4\x8b\x45\xf4\x89\x75\xe8\x89\x01\x85\xff\x74'
+				template.signature = b'\x8b\x4d\xe4\x8b\x45\xf4\x89\x75\xe8\x89\x01\x85\xff\x74'				
 				template.first_entry_offset = 16
 				template.offset2 = -4
 			

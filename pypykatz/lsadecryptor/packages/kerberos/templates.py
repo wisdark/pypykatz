@@ -4,7 +4,6 @@
 #  Tamas Jos (@skelsec)
 #
 import io
-import logging
 from minidump.win_datatypes import *
 from pypykatz.commons.common import *
 from pypykatz.commons.win_datatypes import *
@@ -159,8 +158,9 @@ class KerberosTemplate(PackageTemplate):
 				template.keys_list_struct = KIWI_KERBEROS_KEYS_LIST_6
 				template.hash_password_struct = KERB_HASHPASSWORD_6
 				template.csp_info_struct = PKIWI_KERBEROS_CSP_INFOS_62
-				
-			elif WindowsBuild.WIN_10_1507.value <= sysinfo.buildnumber < WindowsBuild.WIN_10_1511.value:
+			
+			#mod!
+			elif WindowsBuild.WIN_10_1507.value <= sysinfo.buildnumber < WindowsBuild.WIN_10_1607.value:
 				template.signature = b'\x56\x8b\x30\x50\x57'
 				template.first_entry_offset = -15
 				template.kerberos_session_struct = KIWI_KERBEROS_LOGON_SESSION_10_X86
@@ -169,7 +169,7 @@ class KerberosTemplate(PackageTemplate):
 				template.hash_password_struct = KERB_HASHPASSWORD_6
 				template.csp_info_struct = PKIWI_KERBEROS_CSP_INFOS_10
 				
-			elif sysinfo.buildnumber >= WindowsBuild.WIN_10_1511.value:
+			elif sysinfo.buildnumber >= WindowsBuild.WIN_10_1607.value:
 				template.signature = b'\x56\x8b\x30\x50\x57'
 				template.first_entry_offset = -15
 				template.kerberos_session_struct = KIWI_KERBEROS_LOGON_SESSION_10_1607_X86
@@ -433,7 +433,7 @@ class KIWI_KERBEROS_LOGON_SESSION_10_X86:
 		self.pKeyList = PVOID(reader)
 		self.unk26 = PVOID(reader).value
 		#input('pKeyList\n' + hexdump(reader.peek(0x100)))
-		reader.align(8)
+		reader.align()
 		#input('Tickets_1\n' + hexdump(reader.peek(0x100)))
 		self.Tickets_1 = LIST_ENTRY(reader)
 		self.unk27 = FILETIME(reader).value
@@ -749,6 +749,8 @@ class KIWI_KERBEROS_INTERNAL_TICKET_6:
 		self.Flink = PKIWI_KERBEROS_INTERNAL_TICKET_6(reader)
 		self.Blink = PKIWI_KERBEROS_INTERNAL_TICKET_6(reader)
 		
+		#reader.read(8)
+		#input('servicename\n' + hexdump(reader.peek(0x100)))
 		self.unk0 = PVOID(reader).value
 		self.unk1 = PVOID(reader).value
 		self.ServiceName = PKERB_EXTERNAL_NAME(reader)

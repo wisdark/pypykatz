@@ -1,11 +1,20 @@
+#!/usr/bin/env python3
+#
+# Author:
+#  Tamas Jos (@skelsec)
+#
+
+import platform
 from .commons.common import *
 from .lsadecryptor import *
 
 from minidump.minidumpfile import MinidumpFile
 from minikerberos.ccache import CCACHE
 
+if platform.system() == 'Windows':
+	from .commons.readers.local.live_reader import LiveReader
+
 class pypykatz:
-	"""mimikatz offline"""
 	def __init__(self, reader, sysinfo):
 		self.reader = reader
 		self.sysinfo = sysinfo
@@ -19,6 +28,8 @@ class pypykatz:
 		self.orphaned_creds = []
 		self.kerberos_ccache = CCACHE()
 		
+		self.logger = logging.getLogger('pypykatz')
+		
 	def to_dict(self):
 		t = {}
 		t['logon_sessions'] = self.logon_sessions
@@ -28,6 +39,13 @@ class pypykatz:
 	def to_json(self):
 		return json.dumps(self.to_dict())
 		
+	@staticmethod
+	def go_live():
+		reader = LiveReader()
+		sysinfo = KatzSystemInfo.from_live_reader(reader)
+		mimi = pypykatz(reader.get_buffered_reader(), sysinfo)
+		mimi.start()
+		return mimi
 		
 	@staticmethod
 	def parse_minidump_file(filename):
@@ -37,6 +55,36 @@ class pypykatz:
 		mimi = pypykatz(reader, sysinfo)
 		mimi.start()
 		return mimi
+
+	@staticmethod
+	def parse_memory_dump_rekall(filename, override_timestamp = None):
+		from pypykatz.commons.readers.rekall.rekallreader import RekallReader
+		reader = RekallReader.from_memory_file(filename, override_timestamp)
+		sysinfo = KatzSystemInfo.from_rekallreader(reader)
+		mimi = pypykatz(reader, sysinfo)
+		mimi.start()
+		return mimi
+
+	@staticmethod
+	def go_rekall(session, override_timestamp = None, buildnumber = None):
+		from pypykatz.commons.readers.rekall.rekallreader import RekallReader
+		reader = RekallReader.from_session(session, override_timestamp, buildnumber)
+		sysinfo = KatzSystemInfo.from_rekallreader(reader)
+		mimi = pypykatz(reader, sysinfo)
+		mimi.start()
+		return mimi
+		
+	def log_basic_info(self):
+		"""
+		In case of error, please attach this to the issues page
+		"""
+		self.logger.debug('===== BASIC INFO. SUBMIT THIS IF THERE IS AN ISSUE =====')
+		self.logger.debug('CPU arch: %s' % self.sysinfo.architecture.name)
+		self.logger.debug('OS: %s' % self.sysinfo.operating_system)
+		self.logger.debug('BuildNumber: %s' % self.sysinfo.buildnumber)
+		self.logger.debug('MajorVersion: %s ' % self.sysinfo.major_version)
+		self.logger.debug('MSV timestamp: %s' % self.sysinfo.msv_dll_timestamp)
+		self.logger.debug('===== BASIC INFO END =====')
 		
 	def get_logoncreds(self):
 		credman_template = CredmanTemplate.get_template(self.sysinfo)
@@ -48,7 +96,7 @@ class pypykatz:
 	def get_lsa(self):
 		lsa_dec_template = LsaTemplate.get_template(self.sysinfo)
 		lsa_dec = LsaDecryptor(self.reader, lsa_dec_template, self.sysinfo)
-		logging.debug(lsa_dec.dump())
+		self.logger.debug(lsa_dec.dump())
 		return lsa_dec
 	
 	def get_wdigest(self):
@@ -116,10 +164,10 @@ class pypykatz:
 				self.orphaned_creds.append(cred)
 	
 	def start(self):
+		self.log_basic_info()
 		self.lsa_decryptor = self.get_lsa()
 		self.get_logoncreds()
 		self.get_wdigest()
-		#CHICKEN BITS - UNTESTED!!! DO NOT UNCOMMENT
 		self.get_kerberos()
 		self.get_tspkg()
 		self.get_ssp()

@@ -4,7 +4,7 @@
 #  Tamas Jos (@skelsec)
 #
 import io
-import logging
+import json
 
 from pypykatz.lsadecryptor.package_commons import *
 
@@ -42,7 +42,7 @@ class TspkgDecryptor(PackageDecryptor):
 		
 
 	def find_first_entry(self):
-		position = self.find_signature('tspkg.dll',self.decryptor_template.signature)
+		position = self.find_signature('TSpkg.dll',self.decryptor_template.signature)
 		ptr_entry_loc = self.reader.get_ptr_with_offset(position + self.decryptor_template.avl_offset)
 		ptr_entry = self.reader.get_ptr(ptr_entry_loc)
 		return ptr_entry, ptr_entry_loc
@@ -62,13 +62,13 @@ class TspkgDecryptor(PackageDecryptor):
 			self.reader.move(ptr)
 			credential_struct = self.decryptor_template.credential_struct(self.reader)
 			primary_credential = credential_struct.pTsPrimary.read(self.reader)
-			
-			c = TspkgCredential()
-			c.luid = credential_struct.LocallyUniqueIdentifier
-			c.username = primary_credential.credentials.UserName.read_string(self.reader)
-			c.domainname = primary_credential.credentials.Domaine.read_string(self.reader)
-			if primary_credential.credentials.Password.Length != 0:
-				enc_data = primary_credential.credentials.Password.read_maxdata(self.reader)
-				c.password = self.decrypt_password(enc_data)					
-			
-			self.credentials.append(c)
+			if not primary_credential is None:
+				c = TspkgCredential()
+				c.luid = credential_struct.LocallyUniqueIdentifier
+				c.username = primary_credential.credentials.UserName.read_string(self.reader)
+				c.domainname = primary_credential.credentials.Domaine.read_string(self.reader)
+				if primary_credential.credentials.Password.Length != 0:
+					enc_data = primary_credential.credentials.Password.read_maxdata(self.reader)
+					c.password = self.decrypt_password(enc_data)					
+				
+				self.credentials.append(c)

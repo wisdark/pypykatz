@@ -4,7 +4,7 @@
 #  Tamas Jos (@skelsec)
 #
 import io
-import logging
+import json
 import hashlib
 from pypykatz.lsadecryptor.package_commons import *
 
@@ -51,7 +51,7 @@ class DpapiDecryptor(PackageDecryptor):
 		
 	def add_entry(self, dpapi_entry):
 		
-		if dpapi_entry.keySize > 0 and dpapi_entry.keySize % 8 == 0:
+		if dpapi_entry and dpapi_entry.keySize > 0 and dpapi_entry.keySize % 8 == 0:
 			dec_masterkey = self.decrypt_password(dpapi_entry.key, bytes_expected = True)
 			sha_masterkey = hashlib.sha1(dec_masterkey).hexdigest()
 			
