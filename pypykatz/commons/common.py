@@ -184,10 +184,11 @@ class WindowsBuild(enum.Enum):
 	WIN_10_1507 = 10240
 	WIN_10_1511 = 10586
 	WIN_10_1607 = 14393
-	WIN_10_1707 = 15063
+	WIN_10_1703 = 15063
 	WIN_10_1709 = 16299
 	WIN_10_1803 = 17134
 	WIN_10_1809 = 17763
+	WIN_10_1903 = 18362
 	
 class WindowsMinBuild(enum.Enum):
 	WIN_XP = 2500

@@ -48,13 +48,13 @@ class CredmanCredential:
 		self.luid = None
 		self.username = None
 		self.password = None
-		self.domain = None
+		self.domainname = None
 
 	def to_dict(self):
 		t = {}
 		t['credtype'] = self.credtype
 		t['username'] = self.username
-		t['domain'] = self.domain
+		t['domainname'] = self.domainname
 		t['password'] = self.password
 		t['luid'] = self.luid
 		return t
@@ -66,12 +66,14 @@ class CredmanCredential:
 		t = '\t== CREDMAN [%x]==\n' % self.luid
 		t += '\t\tluid %s\n' % self.luid
 		t += '\t\tusername %s\n' % self.username
-		t += '\t\tdomain %s\n' % self.domain
+		t += '\t\tdomain %s\n' % self.domainname
 		t += '\t\tpassword %s\n' % self.password
 		return t
 		
 		
 class LogonSession:
+	grep_header = ['packagename', 'domain', 'user', 'NT', 'LM', 'SHA1', 'masterkey', 'sha1_masterkey', 'key_guid','plaintext']
+	
 	def __init__(self):
 		self.authentication_id = None
 		self.session_id = None
@@ -191,7 +193,7 @@ class LogonSession:
 			t = cred.to_dict()
 			yield [self.luid, 'msv', self.session_id, self.sid, 'msv', '', self.domainname, self.username, 'NT', t['NThash'].hex() if t['NThash'] else '']
 			yield [self.luid, 'msv', self.session_id, self.sid, 'msv', '', self.domainname, self.username, 'LM', t['LMHash'].hex() if t['LMHash'] else '']
-			yield [self.luid, 'msv', self.session_id, self.sid, 'msv', '', self.domainname, self.username, 'sha1', t['SHAHash'].hex() if t['LMHash'] else '']
+			yield [self.luid, 'msv', self.session_id, self.sid, 'msv', '', self.domainname, self.username, 'sha1', t['SHAHash'].hex() if t['SHAHash'] else '']
 		for cred in self.wdigest_creds:
 			t = cred.to_dict()
 			yield [self.luid, t['credtype'], self.session_id, self.sid, t['credtype'], '', self.domainname, self.username, 'plaintext', t['password']]
@@ -214,6 +216,34 @@ class LogonSession:
 		for cred in self.tspkg_creds:
 			t = cred.to_dict()
 			yield [self.luid, t['credtype'], self.session_id, self.sid, t['credtype'], '', self.domainname, self.username, 'plaintext', t['password']]
+
+	def to_grep_rows(self):
+		for cred in self.msv_creds:
+			t = cred.to_dict()
+			yield [
+				'msv', 
+				self.domainname, 
+				self.username, 
+				t['NThash'].hex() if t['NThash'] else '', 
+				t['LMHash'].hex() if t['LMHash'] else '', 
+				t['SHAHash'].hex() if t['SHAHash'] else '',
+				'',
+				'',
+				'',
+				''
+			]
+		
+		for package in [self.wdigest_creds, self.ssp_creds, self.livessp_creds, self.kerberos_creds, self.credman_creds, self.tspkg_creds]:
+			for cred in package:
+				t = cred.to_dict()
+				if t['password'] is not None:
+					yield [str(t['credtype']), str(t['domainname']), str(t['username']), '', '', '', '', '', '', str(t['password'])]
+
+		for cred in self.dpapi_creds:
+			t = cred.to_dict()
+			yield [str(t['credtype']), '', '', '', '', '', str(t['masterkey']), str(t['sha1_masterkey']), str(t['key_guid']), '']
+
+
 		
 		
 class MsvDecryptor(PackageDecryptor):
@@ -287,7 +317,6 @@ class MsvDecryptor(PackageDecryptor):
 		
 	
 	def add_primary_credentials(self, primary_credentials_entry):
-		
 		encrypted_credential_data = primary_credentials_entry.encrypted_credentials.read_data(self.reader)
 
 		#this is super-strange but sometimes the encrypted data can be empty (seen in forensics images)
@@ -332,7 +361,7 @@ class MsvDecryptor(PackageDecryptor):
 		for i in range(self.logon_session_count):
 			self.reader.move(entry_ptr_loc)
 			for x in range(i*2): #skipping offset in an architecture-agnostic way
-				self.reader.read_int() #dows nothing just moves the position
+				self.reader.read_int() #does nothing just moves the position
 				self.log('moving to other logon session')
 			entry_ptr = self.decryptor_template.list_entry(self.reader)
 			self.walk_list(entry_ptr, self.add_entry)

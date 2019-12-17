@@ -159,8 +159,10 @@ class KerberosTemplate(PackageTemplate):
 				template.hash_password_struct = KERB_HASHPASSWORD_6
 				template.csp_info_struct = PKIWI_KERBEROS_CSP_INFOS_62
 			
-			#mod!
-			elif WindowsBuild.WIN_10_1507.value <= sysinfo.buildnumber < WindowsBuild.WIN_10_1607.value:
+			####DOUBLE CHECK THE STRUCTURES BELOW THIS LINE!!!!
+			#### kerbHelper[N] -> KerberosReferences... {-15,7}}, here N= 7
+			
+			elif WindowsBuild.WIN_10_1507.value <= sysinfo.buildnumber < WindowsBuild.WIN_10_1511.value:
 				template.signature = b'\x56\x8b\x30\x50\x57'
 				template.first_entry_offset = -15
 				template.kerberos_session_struct = KIWI_KERBEROS_LOGON_SESSION_10_X86
@@ -169,7 +171,8 @@ class KerberosTemplate(PackageTemplate):
 				template.hash_password_struct = KERB_HASHPASSWORD_6
 				template.csp_info_struct = PKIWI_KERBEROS_CSP_INFOS_10
 				
-			elif sysinfo.buildnumber >= WindowsBuild.WIN_10_1607.value:
+				
+			elif WindowsBuild.WIN_10_1511.value <= sysinfo.buildnumber < WindowsBuild.WIN_10_1903.value:
 				template.signature = b'\x56\x8b\x30\x50\x57'
 				template.first_entry_offset = -15
 				template.kerberos_session_struct = KIWI_KERBEROS_LOGON_SESSION_10_1607_X86
@@ -177,6 +180,17 @@ class KerberosTemplate(PackageTemplate):
 				template.keys_list_struct = KIWI_KERBEROS_KEYS_LIST_6
 				template.hash_password_struct = KERB_HASHPASSWORD_6_1607
 				template.csp_info_struct = PKIWI_KERBEROS_CSP_INFOS_10
+				
+				
+			elif WindowsBuild.WIN_10_1903.value <= sysinfo.buildnumber:
+				template.signature = b'\x56\x8b\x30\x50\x53'
+				template.first_entry_offset = -15
+				template.kerberos_session_struct = KIWI_KERBEROS_LOGON_SESSION_10_1607_X86
+				template.kerberos_ticket_struct = KIWI_KERBEROS_INTERNAL_TICKET_10_1607
+				template.keys_list_struct = KIWI_KERBEROS_KEYS_LIST_6
+				template.hash_password_struct = KERB_HASHPASSWORD_6_1607
+				template.csp_info_struct = PKIWI_KERBEROS_CSP_INFOS_10
+		
 		
 		else:
 			raise Exception('Unknown architecture! %s' % architecture)
@@ -302,7 +316,8 @@ class KIWI_KERBEROS_LOGON_SESSION_51:
 		self.unk6 = PVOID(reader).value
 		self.unk7 = PVOID(reader).value
 		self.LocallyUniqueIdentifier = LUID(reader).value
-		self.unkAlign = ULONG(reader).value  #aliing on x86(reader).value
+		reader.align(8)
+		#self.unkAlign = ULONG(reader).value  #aliing on x86(reader).value
 		self.unk8 = FILETIME(reader).value
 		self.unk9 = PVOID(reader).value
 		self.unk10 = ULONG(reader).value     #	// filetime.1 ?(reader).value
@@ -925,6 +940,7 @@ class KERB_HASHPASSWORD_6_1607:
 class PKIWI_KERBEROS_KEYS_LIST_5(POINTER):
 	def __init__(self, reader):
 		super().__init__(reader, KIWI_KERBEROS_KEYS_LIST_5)
+
 class KIWI_KERBEROS_KEYS_LIST_5:
 	def __init__(self, reader):
 		self.unk0 = DWORD(reader).value		#// dword_1233EC8 dd 4
@@ -932,6 +948,13 @@ class KIWI_KERBEROS_KEYS_LIST_5:
 		self.unk1 = PVOID(reader).value
 		self.unk2 = PVOID(reader).value
 		#//KERB_HASHPASSWORD_5 KeysEntries[ANYSIZE_ARRAY] = (reader).value
+		self.KeyEntries_start = reader.tell()
+		self.KeyEntries = []
+
+	def read(self, reader, keyentries_type):
+		reader.move(self.KeyEntries_start)
+		for i in range(self.cbItem):
+			self.KeyEntries.append(keyentries_type(reader))
 
 class PKIWI_KERBEROS_KEYS_LIST_6(POINTER):
 	def __init__(self, reader):

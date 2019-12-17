@@ -8,6 +8,7 @@ import platform
 from .commons.common import *
 from .lsadecryptor import *
 
+from pypykatz import logger
 from minidump.minidumpfile import MinidumpFile
 from minikerberos.ccache import CCACHE
 
@@ -28,7 +29,7 @@ class pypykatz:
 		self.orphaned_creds = []
 		self.kerberos_ccache = CCACHE()
 		
-		self.logger = logging.getLogger('pypykatz')
+		#self.logger = logging.getLogger('pypykatz')
 		
 	def to_dict(self):
 		t = {}
@@ -49,7 +50,59 @@ class pypykatz:
 		
 	@staticmethod
 	def parse_minidump_file(filename):
-		minidump = MinidumpFile.parse(filename)
+		try:
+			minidump = MinidumpFile.parse(filename)
+			reader = minidump.get_reader().get_buffered_reader()
+			sysinfo = KatzSystemInfo.from_minidump(minidump)
+		except Exception as e:
+			logger.exception('Minidump parsing error!')
+			raise e
+		try:
+			mimi = pypykatz(reader, sysinfo)
+			mimi.start()
+		except Exception as e:
+			#logger.info('Credentials parsing error!')
+			mimi.log_basic_info()
+			raise e
+		return mimi
+
+	@staticmethod
+	def parse_minidump_bytes(data):
+		"""
+		Parses LSASS minidump file bytes.
+		data needs to be bytearray
+		"""
+		minidump = MinidumpFile.parse_bytes(data)
+		reader = minidump.get_reader().get_buffered_reader()
+		sysinfo = KatzSystemInfo.from_minidump(minidump)
+		mimi = pypykatz(reader, sysinfo)
+		mimi.start()
+		return mimi
+
+	@staticmethod
+	def parse_minidump_external(handle):
+		"""
+		Parses LSASS minidump file based on the file object.
+		File object can really be any object as longs as 
+		it implements read, seek, tell functions with the 
+		same parameters as a file object would.
+
+		handle: file like object
+		"""
+		minidump = MinidumpFile.parse_external(handle)
+		reader = minidump.get_reader().get_buffered_reader()
+		sysinfo = KatzSystemInfo.from_minidump(minidump)
+		mimi = pypykatz(reader, sysinfo)
+		mimi.start()
+		return mimi
+	
+	@staticmethod
+	def parse_minidump_buffer(buff):
+		"""
+		Parses LSASS minidump file which contents are in a bytes buffer
+		buff: io.BytesIO object
+		"""
+		minidump = MinidumpFile.parse_buff(buff)
 		reader = minidump.get_reader().get_buffered_reader()
 		sysinfo = KatzSystemInfo.from_minidump(minidump)
 		mimi = pypykatz(reader, sysinfo)
@@ -78,13 +131,13 @@ class pypykatz:
 		"""
 		In case of error, please attach this to the issues page
 		"""
-		self.logger.debug('===== BASIC INFO. SUBMIT THIS IF THERE IS AN ISSUE =====')
-		self.logger.debug('CPU arch: %s' % self.sysinfo.architecture.name)
-		self.logger.debug('OS: %s' % self.sysinfo.operating_system)
-		self.logger.debug('BuildNumber: %s' % self.sysinfo.buildnumber)
-		self.logger.debug('MajorVersion: %s ' % self.sysinfo.major_version)
-		self.logger.debug('MSV timestamp: %s' % self.sysinfo.msv_dll_timestamp)
-		self.logger.debug('===== BASIC INFO END =====')
+		logger.info('===== BASIC INFO. SUBMIT THIS IF THERE IS AN ISSUE =====')
+		logger.info('CPU arch: %s' % self.sysinfo.architecture.name)
+		logger.info('OS: %s' % self.sysinfo.operating_system)
+		logger.info('BuildNumber: %s' % self.sysinfo.buildnumber)
+		logger.info('MajorVersion: %s ' % self.sysinfo.major_version)
+		logger.info('MSV timestamp: %s' % self.sysinfo.msv_dll_timestamp)
+		logger.info('===== BASIC INFO END =====')
 		
 	def get_logoncreds(self):
 		credman_template = CredmanTemplate.get_template(self.sysinfo)
@@ -92,12 +145,34 @@ class pypykatz:
 		logoncred_decryptor = MsvDecryptor(self.reader, msv_template, self.lsa_decryptor, credman_template, self.sysinfo)
 		logoncred_decryptor.start()
 		self.logon_sessions = logoncred_decryptor.logon_sessions
+
+	def get_lsa_bruteforce(self):
+		#good luck!
+		logger.info('Testing all available templates! Expect warnings!')
+		for lsa_dec_template in LsaTemplate.get_template_brute(self.sysinfo):
+			try:
+				lsa_dec = LsaDecryptor.choose(self.reader, lsa_dec_template, self.sysinfo)
+				logger.debug(lsa_dec.dump())
+			except:
+				pass
+			else:
+				logger.info('Lucky you! Brutefoce method found a -probably- working template!')
+				return lsa_dec
 	
 	def get_lsa(self):
-		lsa_dec_template = LsaTemplate.get_template(self.sysinfo)
-		lsa_dec = LsaDecryptor(self.reader, lsa_dec_template, self.sysinfo)
-		self.logger.debug(lsa_dec.dump())
-		return lsa_dec
+		#trying with automatic template detection
+		try:
+			lsa_dec_template = LsaTemplate.get_template(self.sysinfo)
+			lsa_dec = LsaDecryptor.choose(self.reader, lsa_dec_template, self.sysinfo)
+			logger.debug(lsa_dec.dump())
+		except:
+			logger.exception('Failed to automatically detect correct LSA template!')
+			lsa_dec = self.get_lsa_bruteforce()
+			if lsa_dec is None:
+				raise Exception('All detection methods failed.')
+			return lsa_dec
+		else:
+			return lsa_dec
 	
 	def get_wdigest(self):
 		decryptor_template = WdigestTemplate.get_template(self.sysinfo)
@@ -164,7 +239,8 @@ class pypykatz:
 				self.orphaned_creds.append(cred)
 	
 	def start(self):
-		self.log_basic_info()
+		#self.log_basic_info()
+		#input()
 		self.lsa_decryptor = self.get_lsa()
 		self.get_logoncreds()
 		self.get_wdigest()

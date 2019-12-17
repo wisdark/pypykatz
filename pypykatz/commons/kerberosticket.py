@@ -23,7 +23,8 @@ class KerberosSessionKey:
 	def __init__(self):
 		self.keydata = None
 		self.sessionkey = None
-		
+	
+	@staticmethod
 	def parse(key_struct, sysinfo):
 		ksk = KerberosSessionKey()
 		ksk.keydata = key_struct.Data
@@ -121,7 +122,8 @@ class KerberosTicket:
 		krbcred['enc-part'] = EncryptedData({'etype': EncryptionType.NULL.value, 'cipher': EncKrbCredPart(enc_krbcred).dump()})
 	
 		return KRBCRED(krbcred)
-		
+	
+	@staticmethod
 	def parse(kerberos_ticket, reader, sysinfo, type = None):
 		kt = KerberosTicket()
 		kt.type = type
@@ -140,7 +142,7 @@ class KerberosTicket:
 		kt.StartTime = filetime_to_dt(kerberos_ticket.StartTime)
 		kt.EndTime = filetime_to_dt(kerberos_ticket.EndTime)
 		if kerberos_ticket.RenewUntil == 0:
-			kt.RenewUntil = datetime.datetime(1970, 1, 1, 0, 0)
+			kt.RenewUntil = datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.timezone.utc)
 		else:
 			kt.RenewUntil = filetime_to_dt(kerberos_ticket.RenewUntil)
 		
@@ -181,7 +183,7 @@ class KerberosTicket:
 		t += 'EndTime: %s\n'% self.EndTime.isoformat()
 		t += 'RenewUntil: %s\n'% self.RenewUntil.isoformat()
 		t += 'KeyType: %s\n'% self.KeyType
-		t += 'Key: %s\n'% self.Key
+		t += 'Key: %s\n'% self.Key.hex()
 		t += 'TicketFlags: %s\n'% self.TicketFlags
 		t += 'TicketEncType: %s\n'% self.TicketEncType
 		t += 'TicketKvno: %s\n'% self.TicketKvno
