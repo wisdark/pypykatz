@@ -293,10 +293,10 @@ class BufferedLiveReader:
 		
 		
 class LiveReader:
-	def __init__(self):
+	def __init__(self, lsass_process_handle = None):
 		self.processor_architecture = None
 		self.lsass_process_name = 'lsass.exe'
-		self.lsass_process_handle = None
+		self.lsass_process_handle = lsass_process_handle
 		self.current_position = None
 		self.BuildNumber = None
 		self.modules = []
@@ -339,15 +339,16 @@ class LiveReader:
 		buildnumber, t = winreg.QueryValueEx(key, 'CurrentBuildNumber')
 		self.BuildNumber = int(buildnumber)
 		
-		
-		logging.log(1, 'Searching for lsass.exe')
-		pid = get_lsass_pid()
-		logging.log(1, 'Lsass.exe found at PID %d' % pid)
-		logging.log(1, 'Opening lsass.exe')
-		self.lsass_process_handle = OpenProcess(PROCESS_ALL_ACCESS, False, pid)
 		if self.lsass_process_handle is None:
-			raise Exception('Failed to open lsass.exe Reason: %s' % WinError(get_last_error()))
-		
+			logging.log(1, 'Searching for lsass.exe')
+			pid = get_lsass_pid()
+			logging.log(1, 'Lsass.exe found at PID %d' % pid)
+			logging.log(1, 'Opening lsass.exe')
+			self.lsass_process_handle = OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+			if self.lsass_process_handle is None:
+				raise Exception('Failed to open lsass.exe Reason: %s' % WinError(get_last_error()))
+		else:
+			logging.debug('Using pre-defined handle')
 		logging.log(1, 'Enumerating modules')
 		module_handles = EnumProcessModules(self.lsass_process_handle)
 		for module_handle in module_handles:
