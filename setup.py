@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages
 import re
+import platform
 
 VERSIONFILE="pypykatz/_version.py"
 verstrline = open(VERSIONFILE, "rt").read()
@@ -10,6 +11,12 @@ if mo:
 else:
     raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
+ep = {
+	'console_scripts': [
+			'pypykatz = pypykatz.__main__:main',
+		],
+	}
+
 setup(
 	# Application name:
 	name="pypykatz",
@@ -19,7 +26,7 @@ setup(
 
 	# Application author details:
 	author="Tamas Jos",
-	author_email="skelsecprojects@gmail.com",
+	author_email="info@skelsecprojects.com",
 
 	# Packages
 	packages=find_packages(),
@@ -44,16 +51,17 @@ setup(
 		"Operating System :: OS Independent",
 	),
 	install_requires=[
-		'minidump>=0.0.12',
-		'minikerberos>=0.2.1',
+		'minidump>=0.0.13',
+		'minikerberos>=0.2.5',
 		'aiowinreg>=0.0.3',
-		'msldap>=0.2.13',
-		'winsspi>=0.0.9'
+		'msldap>=0.3.20',
+		'winsspi>=0.0.9',
 	],
 	
-	entry_points={
-		'console_scripts': [
-			'pypykatz = pypykatz.__main__:main',
-		],
-	}
+	# No more conveinent .exe entry point thanks to some idiot who 
+	# used the code without modification in a state-backed trojan.
+	# Thank you for runing it for everyone.
+	# 
+	# 
+	entry_points=ep if platform.system().lower() != 'windows' else {}
 )
