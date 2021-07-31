@@ -66,7 +66,7 @@ class PackageDecryptor:
 		Searches for a sequence of bytes in the module identified by module_name
 		"""
 		self.log('Searching for key struct signature')
-		fl = self.reader.find_in_module(module_name, self.decryptor_template.signature)
+		fl = self.reader.find_in_module(module_name, self.decryptor_template.signature, find_first = True)
 		if len(fl) == 0:
 			raise Exception('Signature was not found in module %s Signature: %s' % (module_name, self.decryptor_template.signature.hex()))
 		return fl[0]
@@ -111,25 +111,28 @@ class PackageDecryptor:
 		bytes_expected: bool :indication that the result of decryption is bytes, no need for encoding
 		trim_zeroes: bool: if a text is expected then this variable tells wether we should trim the trailing zeroes after decryption
 		"""
+		
 		dec_password = None
-		if len(enc_password) % 8 == 0: # checking if encrypted password is of correct blocksize
-			temp = self.lsa_decryptor.decrypt(enc_password)
-			if temp and len(temp) > 0:
-				if bytes_expected == False:
-					try: # normal password
-						dec_password = temp.decode('utf-16-le')
-					except: # machine password
-						dec_password = temp.hex()
-					else: # if not machine password, then check if we should trim it
-						if trim_zeroes == True:
-							dec_password = dec_password.rstrip('\x00')
-				else:
-					dec_password = temp
+		temp = self.lsa_decryptor.decrypt(enc_password)
+		if temp and len(temp) > 0:
+			if bytes_expected == False:
+				try: # normal password
+					dec_password = temp.decode('utf-16-le')
+				except: # machine password
+					try:
+						dec_password = temp.decode('utf-8')
+					except:
+						try:
+							dec_password = temp.decode('ascii')
+						except:
+							dec_password = temp.hex()
+				else: # if not machine password, then check if we should trim it
+					if trim_zeroes == True:
+						dec_password = dec_password.rstrip('\x00')
+			else:
+				dec_password = temp
 		
-		else: # special case for (unusable/plaintext?) orphaned credentials
-			dec_password = enc_password
-		
-		return dec_password
+		return dec_password, temp
 		
 	def walk_avl(self, node_ptr, result_ptr_list):
 		"""

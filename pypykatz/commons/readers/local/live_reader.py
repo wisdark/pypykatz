@@ -287,8 +287,8 @@ class BufferedLiveReader:
 			self.move(pos)
 			return self.read_uint()
 	
-	def find_in_module(self, module_name, pattern):
-		t = self.reader.search_module(module_name, pattern)
+	def find_in_module(self, module_name, pattern, find_first = False, reverse_order = False):
+		t = self.reader.search_module(module_name, pattern, find_first = find_first, reverse_order = reverse_order)
 		return t		
 		
 		
@@ -343,10 +343,19 @@ class LiveReader:
 			logging.log(1, 'Searching for lsass.exe')
 			pid = get_lsass_pid()
 			logging.log(1, 'Lsass.exe found at PID %d' % pid)
+			logging.log(1, 'Checking Lsass.exe protection status')
+			#proc_protection_info = get_protected_process_infos(pid)
+			#protection_msg = "Protection Status: No protection"
+			#if proc_protection_info:
+			#	protection_msg = f"Protection Status: {proc_protection_info['type']}"
+			#	if 'signer' in proc_protection_info:
+			#		protection_msg += f" ({proc_protection_info['signer']})"
+			#	raise Exception('Failed to open lsass.exe Reason: %s' % protection_msg)
+			#logging.log(1, protection_msg)
 			logging.log(1, 'Opening lsass.exe')
 			self.lsass_process_handle = OpenProcess(PROCESS_ALL_ACCESS, False, pid)
 			if self.lsass_process_handle is None:
-				raise Exception('Failed to open lsass.exe Reason: %s' % WinError(get_last_error()))
+				raise Exception('Failed to open lsass.exe Reason: %s' % ctypes.WinError())
 		else:
 			logging.debug('Using pre-defined handle')
 		logging.log(1, 'Enumerating modules')
@@ -393,22 +402,17 @@ class LiveReader:
 				return mod
 		return None	
 	
-	def search_module(self, module_name, pattern):
+	def search_module(self, module_name, pattern, find_first = False, reverse_order = False):
 		mod = self.get_module_by_name(module_name)
 		if mod is None:
 			raise Exception('Could not find module! %s' % module_name)
-		t = []
+		needles = []
 		for page in mod.pages:
-			t += page.search(pattern, self.lsass_process_handle)
-		#for ms in self.pages:
-		#	if mod.baseaddress <= ms.start_virtual_address < mod.endaddress:
-		#		t+= ms.search(pattern, self.lsass_process_handle)
-			
-		return t
-		
-	
-		
-	
+			needles += page.search(pattern, self.lsass_process_handle)
+			if len(needles) > 0 and find_first is True:
+				return needles
+
+		return needles
 		
 if __name__ == '__main__':
 	logging.basicConfig(level=1)

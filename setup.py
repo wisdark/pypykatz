@@ -45,17 +45,18 @@ setup(
 
 	# long_description=open("README.txt").read(),
 	python_requires='>=3.6',
-	classifiers=(
+	classifiers=[
 		"Programming Language :: Python :: 3.6",
 		"License :: OSI Approved :: MIT License",
 		"Operating System :: OS Independent",
-	),
+	],
 	install_requires=[
-		'minidump>=0.0.13',
-		'minikerberos>=0.2.5',
-		'aiowinreg>=0.0.3',
-		'msldap>=0.3.20',
-		'winsspi>=0.0.9',
+		'minidump>=0.0.17',
+		'minikerberos>=0.2.11',
+		'aiowinreg>=0.0.4',
+		'msldap>=0.3.29',
+		'winacl>=0.1.1',
+		'aiosmb>=0.2.41',
 	],
 	
 	# No more conveinent .exe entry point thanks to some idiot who 
