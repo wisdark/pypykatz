@@ -5,7 +5,6 @@
 #
 
 import io
-import enum
 import sys
 
 from pypykatz.dpapi.constants import *
@@ -127,7 +126,7 @@ class MasterKey:
 		#print('temp_key : %s' % temp_key)
 		crypt_key = temp_key[:ALGORITHMS_DATA[self.crypto_algorithm][0]]
 		iv = temp_key[ALGORITHMS_DATA[self.crypto_algorithm][0]:][:ALGORITHMS_DATA[self.crypto_algorithm][3]]
-		cipher = ALGORITHMS_DATA[self.crypto_algorithm][1](crypt_key, mode = ALGORITHMS_DATA[self.crypto_algorithm][2], iv = iv)
+		cipher = ALGORITHMS_DATA[self.crypto_algorithm][1](crypt_key, mode = ALGORITHMS_DATA[self.crypto_algorithm][2], IV = iv)
 		
 		cleartext = cipher.decrypt(self.data)
 		key_dec = cleartext[-64:]
@@ -172,10 +171,10 @@ class MasterKeyFile:
 		self.credhist_length = None
 		self.domainkey_length = None
 		
-		self.masterkey = None
-		self.backupkey = None
-		self.credhist = None
-		self.domainkey = None
+		self.masterkey:MasterKey = None
+		self.backupkey:MasterKey = None
+		self.credhist:CredHist = None
+		self.domainkey:DomainKey = None
 	
 	@staticmethod
 	def from_bytes(data):

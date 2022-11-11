@@ -5,10 +5,10 @@
 #
 
 
+import traceback
 from pypykatz import logger
 from pypykatz.commons.common import hexdump
-from pypykatz.crypto.des import triple_des, CBC
-from pypykatz.crypto.aes import AESModeOfOperationCFB
+from unicrypto.symmetric import TDES, AES, MODE_CFB, MODE_CBC
 from pypykatz.lsadecryptor.package_commons import PackageDecryptor
 
 class LsaDecryptor_NT6(PackageDecryptor):
@@ -52,9 +52,17 @@ class LsaDecryptor_NT6(PackageDecryptor):
 
 	def get_IV(self, pos):
 		self.log('Reading IV')
-		#print('Offset to IV: %s' % hex(self.decryptor_template.key_pattern.offset_to_IV_ptr))
+
+		#### TEST!!!!
+		#if hasattr(self.sysinfo, 'IV_OFFSET'):
+		#	ptr_iv = self.reader.get_ptr_with_offset(pos + self.sysinfo.IV_OFFSET)
+		#	self.reader.move(ptr_iv)
+		#	data = self.reader.read(self.decryptor_template.key_pattern.IV_length)
+		#	self.log('IV data: %s' % hexdump(data))
+		#	return data
+		
 		ptr_iv = self.reader.get_ptr_with_offset(pos + self.decryptor_template.key_pattern.offset_to_IV_ptr)
-		self.log('IV pointer takes us to 0x%08x' % ptr_iv)
+		#self.log('IV pointer takes us to 0x%08x' % ptr_iv)
 		self.reader.move(ptr_iv)
 		data = self.reader.read(self.decryptor_template.key_pattern.IV_length)
 		self.log('IV data: %s' % hexdump(data))
@@ -88,12 +96,12 @@ class LsaDecryptor_NT6(PackageDecryptor):
 			if size % 8:
 				if not self.aes_key or not self.iv:
 					return cleartext
-				cipher = AESModeOfOperationCFB(self.aes_key, iv = self.iv)
+				cipher = AES(self.aes_key, MODE_CFB, IV = self.iv, segment_size=128)
 				cleartext = cipher.decrypt(encrypted)
 			else:
 				if not self.des_key or not self.iv:
 					return cleartext
-				cipher = triple_des(self.des_key, CBC, self.iv[:8])
+				cipher = TDES(self.des_key, MODE_CBC, self.iv[:8])
 				cleartext = cipher.decrypt(encrypted)
 		return cleartext
 

@@ -1,10 +1,22 @@
+![Supported Python versions](https://img.shields.io/badge/python-3.7+-blue.svg) [![Twitter](https://img.shields.io/twitter/follow/skelsec?label=skelsec&style=social)](https://twitter.com/intent/follow?screen_name=skelsec)
+
+:triangular_flag_on_post: This is the public repository of PyPyKatz, for latest version and updates please consider supporting us through https://porchetta.industries/
+
 # pypykatz
 Mimikatz implementation in pure Python. At least a part of it :)  
 Runs on all OS's which support python>=3.6
 ![pypy_card](https://user-images.githubusercontent.com/19204702/71646030-221fe200-2ce1-11ea-9e2a-e587ea4790d7.jpg)
 
-## Sponsors
-[<img src="https://user-images.githubusercontent.com/19204702/112737376-6e94b480-8f5a-11eb-8134-06397e83a3b9.png" width="130" height="130"/>](https://kovert.no/)
+## :triangular_flag_on_post: Sponsors
+
+If you want to sponsors this project and have the latest updates on this project, latest issues fixed, latest features, please support us on https://porchetta.industries/
+
+## Official Discord Channel
+
+Come hang out on Discord!
+
+[![Porchetta Industries](https://discordapp.com/api/guilds/736724457258745996/widget.png?style=banner3)](https://discord.gg/ycGXUxy)
+
 
 
 ## WIKI

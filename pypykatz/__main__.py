@@ -11,6 +11,7 @@ def main():
 	import argparse
 	import glob
 	
+	from pypykatz import logger
 	from pypykatz.utils.crypto.cmdhelper import CryptoCMDHelper
 	from pypykatz.ldap.cmdhelper import LDAPCMDHelper
 	from pypykatz.kerberos.cmdhelper import KerberosCMDHelper
@@ -19,8 +20,9 @@ def main():
 	from pypykatz.remote.cmdhelper import RemoteCMDHelper
 	from pypykatz.dpapi.cmdhelper import DPAPICMDHelper
 	from pypykatz.rdp.cmdhelper import RDPCMDHelper
+	from pypykatz.parsers.cmdhelper import ParsersCMDHelper
 	
-	cmdhelpers = [LSACMDHelper(), RegistryCMDHelper(), CryptoCMDHelper(), KerberosCMDHelper(), RemoteCMDHelper(), DPAPICMDHelper(), LDAPCMDHelper(), RDPCMDHelper()]
+	cmdhelpers = [LSACMDHelper(), RegistryCMDHelper(), CryptoCMDHelper(), KerberosCMDHelper(), RemoteCMDHelper(), DPAPICMDHelper(), LDAPCMDHelper(), RDPCMDHelper(), ParsersCMDHelper()]
 	
 	try:
 		from pypykatz.smb.cmdhelper import SMBCMDHelper
@@ -70,11 +72,14 @@ def main():
 	###### VERBOSITY
 	if args.verbose == 0:
 		logging.basicConfig(level=logging.INFO)
+		logger.setLevel(logging.INFO)
 	elif args.verbose == 1:
 		logging.basicConfig(level=logging.DEBUG)
+		logger.setLevel(logging.DEBUG)
 	else:
 		level = 5 - args.verbose
 		logging.basicConfig(level=level)
+		logger.setLevel(1)
 	
 	##### Common obj
 	#results = {}

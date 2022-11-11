@@ -3,9 +3,8 @@
 # Author:
 #  Tamas Jos (@skelsec)
 #
-import io
-import logging
-from pypykatz.crypto.RC4 import RC4
+
+from unicrypto.symmetric import RC4
 from pypykatz.alsadecryptor.package_commons import PackageDecryptor
 from pypykatz.alsadecryptor.win_datatypes import LONG
 
@@ -88,7 +87,7 @@ class LsaDecryptor_NT5(PackageDecryptor):
 		self.log('Looking for main struct signature in memory...')
 		fl = self.reader.find_in_module('lsasrv.dll', self.decryptor_template.signature)
 		if len(fl) == 0:
-			logging.debug('signature not found! %s' % self.decryptor_template.signature.hex())
+			self.logger.log('signature not found! %s' % self.decryptor_template.signature.hex())
 			raise Exception('LSA signature not found!')
 			
 		self.log('Found candidates on the following positions: %s' % ' '.join(hex(x) for x in fl))

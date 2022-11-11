@@ -14,6 +14,7 @@ from pypykatz.alsadecryptor.package_commons import PackageDecryptor
 
 class MsvCredential:
 	def __init__(self):
+		self.credtype = 'msv'
 		self.username = None
 		self.domainname = None
 		self.NThash = None
@@ -53,7 +54,7 @@ class CredmanCredential:
 		self.luid = None
 		self.username = None
 		self.password = None
-		self.password_raw = None
+		self.password_raw = b''
 		self.domainname = None
 
 	def to_dict(self):

