@@ -29,7 +29,7 @@ setup(
 	author_email="info@skelsecprojects.com",
 
 	# Packages
-	packages=find_packages(),
+	packages=find_packages(exclude=["tests*"]),
 
 	# Include additional files into the package
 	include_package_data=True,
@@ -51,15 +51,15 @@ setup(
 		"Operating System :: OS Independent",
 	],
 	install_requires=[
-		'unicrypto>=0.0.9',
-		'minidump>=0.0.21',
-		'minikerberos>=0.3.5',
-		'aiowinreg>=0.0.7',
-		'msldap>=0.4.1',
-		'winacl>=0.1.5',
-		'aiosmb>=0.4.2',
-		'aesedb>=0.1.0',
-		'tqdm',
+		'unicrypto>=0.0.10,<=0.1.0',
+		'minidump>=0.0.21,<=0.1.0',
+		'minikerberos>=0.4.1,<=0.5.0',
+		'aiowinreg>=0.0.11,<=0.1.0',
+		'msldap>=0.5.7,<=0.6.0',
+		'winacl>=0.1.9,<=0.2.0',
+		'aiosmb>=0.4.8,<=0.5.0',
+		'aesedb>=0.1.4,<=0.2.0',
+		'tqdm', 
 	],
 	
 	# No more conveinent .exe entry point thanks to some idiot who 

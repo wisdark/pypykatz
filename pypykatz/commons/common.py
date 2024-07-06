@@ -2,6 +2,7 @@ import traceback
 import enum
 import json
 import datetime
+import base64
 
 from minidump.streams.SystemInfoStream import PROCESSOR_ARCHITECTURE
 
@@ -360,6 +361,7 @@ class WindowsBuild(enum.Enum):
 	WIN_10_2004 = 19041
 	WIN_10_20H2 = 19042
 	WIN_11_2022 = 20348
+	WIN_11_2023 = 22621
 	
 class WindowsMinBuild(enum.Enum):
 	WIN_XP = 2500
@@ -456,7 +458,7 @@ class KatzSystemInfo:
 		self.major_version = 6
 		
 	def __str__(self):
-		return '%s %s' % (self.architecture.name, self.buildnumber)
+		return 'ARCH:%s BUILD:%s MSV_TS:%s OS(guess): %s' % (self.architecture.name, self.buildnumber, self.msv_dll_timestamp, self.operating_system)
 	
 	@staticmethod
 	def from_live_reader(lr):
@@ -498,4 +500,12 @@ class KatzSystemInfo:
 		sysinfo.msv_dll_timestamp = rekallreader.msv_dll_timestamp
 	
 		return sysinfo
-	
+
+
+def base64_decode_url(value: str, bytes_expected=False) -> str:
+	padding = 4 - (len(value) % 4)
+	value = value + ("=" * padding)
+	result = base64.urlsafe_b64decode(value)
+	if bytes_expected is True:
+		return result
+	return result.decode()

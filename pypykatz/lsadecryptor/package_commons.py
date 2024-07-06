@@ -104,7 +104,7 @@ class PackageDecryptor:
 		except Exception as e:
 			self.log('%s: Logging failed for position %s' % (name, hex(ptr)))
 		
-	def decrypt_password(self, enc_password, bytes_expected = False, trim_zeroes = True):
+	def decrypt_password(self, enc_password, bytes_expected = False, trim_zeroes = True, segment_size=128):
 		"""
 		Common decryption method for LSA encrypted passwords. Result be string or hex encoded bytes (for machine accounts).
 		Also supports bad data, as orphaned credentials may contain actual password OR garbage
@@ -115,7 +115,7 @@ class PackageDecryptor:
 		"""
 		
 		dec_password = None
-		temp = self.lsa_decryptor.decrypt(enc_password)
+		temp = self.lsa_decryptor.decrypt(enc_password, segment_size=segment_size)
 		if temp and len(temp) > 0:
 			if bytes_expected == False:
 				try: # normal password
@@ -173,11 +173,16 @@ class PackageDecryptor:
 		max_walk = max_walk
 		self.log_ptr(entry_ptr.value, 'List entry -%s-' % entry_ptr.finaltype.__name__ if not override_ptr else override_ptr.__name__)
 		while True:
-			if override_ptr:
-				entry = entry_ptr.read(self.reader, override_ptr)
-			else:
-				entry = entry_ptr.read(self.reader)
-
+			try:
+				if override_ptr:
+					entry = entry_ptr.read(self.reader, override_ptr)
+				else:
+					entry = entry_ptr.read(self.reader)
+			except Exception as e:
+				self.log('Exception while reading list entry: %s' % e)
+				break # uncomment this line to discard the exception and continue parsing
+				raise
+			
 			if not entry:
 				break
 				

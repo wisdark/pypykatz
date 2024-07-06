@@ -15,7 +15,8 @@ from pypykatz import logger
 from pypykatz.pypykatz import pypykatz
 from pypykatz.commons.common import UniversalEncoder
 from pypykatz.lsadecryptor.packages.msv.decryptor import LogonSession
-
+from minidump.minidumpfile import MinidumpFile
+from pypykatz.commons.common import KatzSystemInfo
 
 
 class LSACMDHelper:
@@ -35,7 +36,7 @@ class LSACMDHelper:
 
 
 		group = parser.add_parser('lsa', help='Get secrets from memory dump')
-		group.add_argument('cmd', choices=['minidump','rekall'])
+		group.add_argument('cmd', choices=['minidump','rekall','info'])
 		group.add_argument('memoryfile', help='path to the dump file')
 		group.add_argument('-t','--timestamp_override', type=int, help='enforces msv timestamp override (0=normal, 1=anti_mimikatz)')
 		group.add_argument('--json', action='store_true',help = 'Print credentials in JSON format')
@@ -101,8 +102,13 @@ class LSACMDHelper:
 						print(':'.join(row))
 				for cred in results[result].orphaned_creds:
 					t = cred.to_dict()
-					if t['credtype'] != 'dpapi':
-						if t['password'] is not None:
+					if t['credtype'] == 'cloudap':
+						x = [str(t['credtype']), '', '', '', '', '', str(cred.get_masterkey_hex()), str(t['dpapi_key_sha1']), str(t['key_guid']), t['PRT']]
+						if hasattr(args, 'directory') and args.directory is not None:
+							x = [result] + x
+						print(':'.join(x))
+					elif t['credtype'] != 'dpapi':
+						if t.get('password', None) is not None and t['password'] is not None:
 							x =  [str(t['credtype']), str(t['domainname']), str(t['username']), '', '', '', '', '', str(t['password'])]
 							if hasattr(args, 'directory') and args.directory is not None:
 								x = [result] + x
@@ -205,9 +211,8 @@ class LSACMDHelper:
 				args.packages.append('ktickets')
 			mimi = pypykatz.parse_memory_dump_rekall(args.memoryfile, args.timestamp_override, packages=args.packages)
 			results['rekall'] = mimi
-	
-		###### Minidump
-		elif args.cmd == 'minidump':
+		
+		elif args.cmd == 'info':
 			if args.directory:
 				dir_fullpath = os.path.abspath(args.memoryfile)
 				file_pattern = '*.dmp'
@@ -215,24 +220,43 @@ class LSACMDHelper:
 					globdata = os.path.join(dir_fullpath, '**', file_pattern)
 				else:	
 					globdata = os.path.join(dir_fullpath, file_pattern)
-					
-				logger.info('Parsing folder %s' % dir_fullpath)
-				for filename in glob.glob(globdata, recursive=args.recursive):
-					logger.info('Parsing file %s' % filename)
-					try:
-						if args.kerberos_dir is not None and 'all' not in args.packages:
-							args.packages.append('ktickets')
-						mimi = pypykatz.parse_minidump_file(filename, packages=args.packages)
-						results[filename] = mimi
-						if args.halt_on_error == True and len(mimi.errors) > 0:
-							raise Exception('Error in modules!')
-					except Exception as e:
-						files_with_error.append(filename)
-						logger.exception('Error parsing file %s ' % filename)
-						if args.halt_on_error == True:
-							raise e
-						else:
-							pass
+			else:
+				globdata = args.memoryfile
+			
+			for filename in glob.glob(globdata, recursive=args.recursive):
+				minidump = MinidumpFile.parse(filename)
+				sysinfo = KatzSystemInfo.from_minidump(minidump)
+				print('[%s] %s' % (filename, sysinfo))
+
+	
+		###### Minidump
+		elif args.cmd == 'minidump':
+			if args.directory:
+				dir_fullpath = os.path.abspath(args.memoryfile)
+				for file_pattern in ['*.dmp', '*.DMP']:
+					if args.recursive == True:
+						globdata = os.path.join(dir_fullpath, '**', file_pattern)
+					else:	
+						globdata = os.path.join(dir_fullpath, file_pattern)
+						
+					logger.info('Parsing folder %s' % dir_fullpath)
+					for filename in glob.glob(globdata, recursive=args.recursive):
+						logger.info('Parsing file %s' % filename)
+						try:
+							if args.kerberos_dir is not None and 'all' not in args.packages:
+								args.packages.append('ktickets')
+							mimi = pypykatz.parse_minidump_file(filename, packages=args.packages)
+							results[filename] = mimi
+							if args.halt_on_error == True and len(mimi.errors) > 0:
+								print(mimi.errors)
+								raise Exception('Error in modules!')
+						except Exception as e:
+							files_with_error.append(filename)
+							logger.exception('Error parsing file %s ' % filename)
+							if args.halt_on_error == True:
+								raise e
+							else:
+								pass
 					
 			else:
 				logger.info('Parsing file %s' % args.memoryfile)
